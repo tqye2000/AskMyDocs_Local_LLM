@@ -1,17 +1,16 @@
 ##################################################################
-# SMT PLM Q&A GUI-- Mixtal Q&A model
+# Q&A based on local LLMs
 #
 # History
 # When      | Who            | What
 # 07/02/2024| Tian-Qing Ye   | Created
+# 17/04/2024| Tian-Qing Ye   | Support selection of LLM
 ##################################################################
 import sys
 import os
 
 from datetime import datetime
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
-#from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-#from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from langchain.text_splitter import CharacterTextSplitter
@@ -40,7 +39,8 @@ from typing import List
 #!import nltk
 #!nltk.download('all')
 
-model_name = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+#model_name = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+model_name = "Qwen/CodeQwen1.5-7B-Chat"
 
 # Define the folder path where your documents are
 DATA_PATH = "./tempDir"
@@ -315,6 +315,7 @@ def Build_Search_Index(docPath, files):
 @st.cache_resource
 def Create_Model_Chain():
 
+    model_name = st.session_state.use_llm
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -332,7 +333,7 @@ def Create_Model_Chain():
         """
 
     PROMPT = PromptTemplate(template=template, input_variables=["summaries", "question"])
-    generation_config = GenerationConfig.from_pretrained(model_name)
+    generation_config = GenerationConfig.from_pretrained(st.session_state.use_llm)
     generation_config.max_new_tokens = 1024
     generation_config.temperature = 0.2
     generation_config.do_sample = True
@@ -363,6 +364,17 @@ def Create_Model_Chain():
 ################ MAIN ########################
 ##############################################
 def main(argv):
+
+    model_name = st.selectbox("Choose the Model", ("Mixtral-8x7B-Instruct", "CodeQwen1.5-7B-Chat"))
+    if model_name == "Mixtral-8x7B-Instruct":
+        st.session_state.use_llm = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    elif model_name.startswith("CodeQwen"):
+        st.session_state.use_llm = "Qwen/CodeQwen1.5-7B-Chat"
+    elif model_name.startswith("Codegemma"):
+        st.session_state.use_llm = "google/codegemma-7b-it"
+    else:
+        # Use Mixtral model
+        st.session_state.use_llm = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 
     nfiles = Load_Files()
     if nfiles > 0:
@@ -479,6 +491,9 @@ def main(argv):
 if __name__ == "__main__":
 
     # Initialising session state
+    if "use_llm" not in st.session_state:
+        st.session_state.use_llm = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
     if 'new_file_loaded' not in st.session_state:
         st.session_state['new_file_loaded'] = False
 
