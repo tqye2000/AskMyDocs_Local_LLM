@@ -36,6 +36,7 @@ MODEL_PATH = "D:/hf_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"    # LLM: Mistr
 EMBEDDINGS_MODEL_PATH = r"D:/hf_models/hkunlp/instructor-xl"        # Embedding: Instructor-XL
 
 FAISS_PATH = "./saved_faiss_index"
+SCORE_THRESHOLD = 0.5   # Set a threshold for semantic distance. Above this, the document is considered to be irrelevant.
 
 # Define the folder path where your documents are
 DATA_PATH = "./tempDir"
@@ -180,19 +181,20 @@ def Display_Chat(chat_history):
             resp = chat['Bot']
             st.chat_message("assistant").markdown(resp, unsafe_allow_html=True)  # <-- Important: use markdown!
 
-def Hybrid_Search(query, search_index, all_documents, top_k_semantic=4, top_k_final=6):
+def Hybrid_Search(query, search_index, all_documents, top_k_semantic=4, top_k_final=6, score_threshold=1.0):
     """
-    Perform a hybrid search: semantic (FAISS) + keyword match.
+    Perform a hybrid search: semantic (FAISS) + keyword match, with score filtering.
 
     Args:
         query (str): The user query.
         search_index (FAISS): The FAISS search index object.
         all_documents (List[Document]): List of all preloaded documents (for keyword scanning).
-        top_k_semantic (int): Number of semantic top hits.
+        top_k_semantic (int): Number of semantic top hits to retrieve.
         top_k_final (int): Number of documents to return finally after merging.
+        score_threshold (float): Maximum allowed semantic distance (lower = more strict).
 
     Returns:
-        List[Document]: Merged and deduplicated list of top relevant documents.
+        List[Document]: Merged and filtered list of top relevant documents.
     """
     if not query.strip():
         return []
@@ -200,7 +202,16 @@ def Hybrid_Search(query, search_index, all_documents, top_k_semantic=4, top_k_fi
     # 1. Semantic Search
     semantic_hits = search_index.similarity_search_with_score(query, k=top_k_semantic)
 
-    # 2. Keyword Search
+    # 2. Filter out low-confidence semantic matches
+    good_semantic_docs = []
+    for doc, score in semantic_hits:
+        if score <= score_threshold:
+            good_semantic_docs.append(doc)
+            save_log(f"Included: {doc.page_content} ({score})")
+
+    print(f"Semantic hits: {len(semantic_hits)}, Good semantic hits (score <= {score_threshold}): {len(good_semantic_docs)}")
+
+    # 3. Keyword Search
     keywords = query.lower().split()
     keyword_hits = []
     for doc in all_documents:
@@ -208,24 +219,30 @@ def Hybrid_Search(query, search_index, all_documents, top_k_semantic=4, top_k_fi
         if any(keyword in text for keyword in keywords):
             keyword_hits.append(doc)
 
-    # 3. Merge Results
+    print(f"Keyword hits: {len(keyword_hits)}")
+
+    # 4. Merge Results without duplication
     seen = set()
     combined_docs = []
 
-    # Add semantic hits first
-    for doc, _ in semantic_hits:
+    # Add good semantic hits first
+    for doc in good_semantic_docs:
         if doc.page_content not in seen:
             combined_docs.append(doc)
             seen.add(doc.page_content)
 
-    # Add keyword hits next
-    for doc in keyword_hits:
-        if doc.page_content not in seen:
-            combined_docs.append(doc)
-            seen.add(doc.page_content)
+    ##=== Note: Uncomment this if you want to add keyword hits after semantic hits ===
+    # # Then add keyword hits
+    # for doc in keyword_hits:
+    #     if doc.page_content not in seen:
+    #         combined_docs.append(doc)
+    #         seen.add(doc.page_content)
 
-    # 4. Limit to top_k_final
-    return combined_docs[:top_k_final]
+    # 5. Limit to top_k_final
+    if len(combined_docs) > top_k_final:
+        combined_docs = combined_docs[:top_k_final]
+
+    return combined_docs
 
 
 def Build_Search_Index(docPath, files):
@@ -405,7 +422,7 @@ def main(argv):
                 # # Assuming you cached all_documents somewhere
                 # good_docs = Hybrid_Search(query, search_index, all_documents, top_k_semantic=4, top_k_final=6)
                 wide_semantic_docs = search_index.similarity_search(query, k=50) # Get top 50 documents
-                good_docs = Hybrid_Search(query, search_index, wide_semantic_docs, top_k_semantic=4, top_k_final=6)
+                good_docs = Hybrid_Search(query, search_index, wide_semantic_docs, top_k_semantic=4, top_k_final=6, score_threshold=SCORE_THRESHOLD)
                 save_log(f"Query: {query}\n Contexts:")
                 for doc in good_docs:
                     save_log(f"Included: {doc.page_content[:200]}...")
@@ -418,9 +435,13 @@ def main(argv):
             print(f"Prompt: {prompt}")
 
             # == LLM answering
-            with st.spinner('Wait ...'):
-                results = chain({"input_documents": good_docs, "question": prompt}, return_only_outputs=True)
-            answer = results["output_text"]
+            if len(good_docs) == 0 and search_index:
+                answer = "I don't know based on the provided information."
+            else:
+                # == LLM answering
+                with st.spinner('Wait ...'):
+                    results = chain({"input_documents": good_docs, "question": prompt}, return_only_outputs=True)
+                answer = results["output_text"]
 
             # === Build the Sources List ===
             sources_set = set()  # Use set to avoid duplicates
