@@ -1,9 +1,9 @@
-transformers-4.37.2
-accelerate-0.26.1
-bitsandbytes-0.42.0
-sentence-transformers
-torch-2.2.0
-torchaudio-2.2.0
-torchvision-0.17.0
-setuptools-69.0.3
+llama-cpp-python
+InstructorEmbedding
+sentence-transformers==2.2.2
+huggingface_hub==0.19.4
+transformers==4.38.1
+langchain==0.3.24
+langchain_community==0.3.22
+pypdf
 faiss-cpu

@@ -1,2 +1,2 @@
-streamlit run AskMyDocs_mt.py --server.port 8580
+streamlit run app.py
 
