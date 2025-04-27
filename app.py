@@ -1,5 +1,5 @@
 ##################################################################
-# Q&A based on local LLMs
+# RAG based on local LLMs
 #
 # History
 # When      | Who            | What
@@ -15,7 +15,6 @@ from langchain.schema import Document
 from langchain_community.llms import LlamaCpp
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain_community.vectorstores import FAISS
-#from langchain_community.agent_toolkits import FileManagementToolkit
 #from langchain_community.utilities import DuckDuckGoSearchAPIWrapper # --> no KEY required!
 
 from llama_cpp import Llama
@@ -33,9 +32,9 @@ import logging
 logging.basicConfig(level=logging.ERROR)
 os.environ["LLAMA_CPP_LOG_LEVEL"] = "ERROR"
 
-#model_path = r"D:/hf_models/models--mistralai--Mixtral-8x7B-Instruct-v0.1/snapshots/1e637f2d7cb0a9d6fb1922f305cb784995190a83"
-MODEL_PATH = "D:/hf_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-EMBEDDINGS_MODEL_PATH = r"D:/hf_models/hkunlp/instructor-xl"  
+MODEL_PATH = "D:/hf_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"    # LLM: Mistral-7B-Instruct (quantized model)
+EMBEDDINGS_MODEL_PATH = r"D:/hf_models/hkunlp/instructor-xl"        # Embedding: Instructor-XL
+
 FAISS_PATH = "./saved_faiss_index"
 
 # Define the folder path where your documents are
@@ -43,16 +42,7 @@ DATA_PATH = "./tempDir"
 if not os.path.exists(DATA_PATH):
     os.mkdir(DATA_PATH)
 
-
 AI_ROLE_OPTIONS_EN = [
-    "helpful assistant",
-    "code assistant",
-    "code reviewer",
-    "text improver",
-    "english teacher",
-]
-
-AI_ROLE_OPTIONS_ZW = [
     "helpful assistant",
     "code assistant",
     "code reviewer",
@@ -344,13 +334,11 @@ def Create_Model_Chain(_callbacks=None):
 ##############################################
 def main(argv):
 
-    model_name = st.selectbox("Choose the Model", ("Mistral-7B-Instruct", "Mixtral-8x7B-Instruct", ))
+    model_name = st.selectbox("Choose the Model", ("Mistral-7B-Instruct",))
     if model_name.startswith("Mistral-7B-Instruct"):
         st.session_state.use_llm = MODEL_PATH
-    elif model_name == "Mixtral-8x7B-Instruct":
-        st.session_state.use_llm = "mistralai/Mixtral-8x7B-Instruct-v0.1"
-    elif model_name.startswith("Codegemma"):
-        st.session_state.use_llm = "google/codegemma-7b-it"
+    # elif model_name.startswith("Codegemma"):
+    #     st.session_state.use_llm = "google/codegemma-7b-it"
     else:
         # Use local Mistral model
         st.session_state.use_llm = MODEL_PATH
